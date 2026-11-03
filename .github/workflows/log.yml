@@ -1,7 +1,7 @@
 name: Log pool temperature
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"   # every 15 min, off the top of the hour when GitHub is busiest
+    - cron: "7,22,37,52 * * * *"   # every 15 min, off the top of the hour when GitHub is busiest (GitHub may run late or skip)
   workflow_dispatch:
 
 permissions:
