@@ -1,0 +1,50 @@
+name: Log pool temperature
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"   # every 15 min, off the top of the hour when GitHub is busiest
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: log
+  cancel-in-progress: false
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Take a reading and build the page
+        run: python3 logger.py
+        env:
+          HAYWARD_USER: ${{ secrets.HAYWARD_USER }}
+          HAYWARD_PASSWORD: ${{ secrets.HAYWARD_PASSWORD }}
+          HAYWARD_MSP_ID: ${{ secrets.HAYWARD_MSP_ID }}
+          HAYWARD_BOW_ID: ${{ secrets.HAYWARD_BOW_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Commit the reading
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Reading $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull -q --rebase && git push -q
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

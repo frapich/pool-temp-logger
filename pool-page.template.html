@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pool Temperature</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f4f2;
+  --surface: #fcfcfb;
+  --border: #e3e2de;
+  --grid: #ebeae6;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --text-3: #7a7974;
+  --pool: #2a78d6;
+  --air: #eb6834;
+  --warn: #b26a00;
+  --alert-bg: #fdecec; --alert-border: #f3b7b6; --alert-text: #9b1c1c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110;
+    --surface: #1a1a19;
+    --border: #2e2e2c;
+    --grid: #262624;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --text-3: #8f8e86;
+    --pool: #3987e5;
+    --air: #d95926;
+    --warn: #e0a040;
+    --alert-bg: #3a1716; --alert-border: #6e2a28; --alert-text: #ffb4b0;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110; --surface: #1a1a19; --border: #2e2e2c; --grid: #262624;
+  --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
+  --pool: #3987e5; --air: #d95926; --warn: #e0a040;
+  --alert-bg: #3a1716; --alert-border: #6e2a28; --alert-text: #ffb4b0;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+.sub { color: var(--text-3); font-size: 13px; margin: 0 0 20px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.hero { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-end; }
+.stat .label { color: var(--text-2); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.stat .value { font-size: 56px; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.stat.small .value { font-size: 32px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.updated { margin-left: auto; color: var(--text-3); font-size: 13px; text-align: right; }
+.updated.stale { color: var(--warn); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; color: var(--text-2); padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--text); color: var(--surface); }
+.legend { display: flex; gap: 16px; margin-left: auto; font-size: 13px; color: var(--text-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-wrap { position: relative; }
+svg { display: block; width: 100%; height: 300px; overflow: visible; }
+.axis text { fill: var(--text-3); font-size: 11px; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.12); white-space: nowrap; display: none; }
+.tip .t { color: var(--text-3); margin-bottom: 4px; }
+.tip .r { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.empty { color: var(--text-3); text-align: center; padding: 100px 0; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); }
+th { color: var(--text-2); font-weight: 500; font-size: 13px; }
+td.num, th.num { text-align: right; }
+tr.day td { background: var(--bg); color: var(--text-2); font-weight: 500; font-size: 13px; }
+.more { margin-top: 12px; }
+.more button { border: 1px solid var(--border); background: transparent; color: var(--text-2); border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.note { color: var(--text-3); font-size: 12px; margin-top: 8px; }
+.banner { display: none; background: var(--alert-bg); color: var(--alert-text); border: 1px solid var(--alert-border);
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; font-weight: 500; }
+.banner small { display: block; font-weight: 400; margin-top: 2px; opacity: .85; }
+@media (max-width: 560px) {
+  .stat .value { font-size: 44px; } .stat.small .value { font-size: 26px; }
+  .updated { margin-left: 0; text-align: left; width: 100%; }
+  .legend { margin-left: 0; width: 100%; }
+  svg { height: 240px; }
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>Pool temperature</h1>
+  <p class="sub">Oro Valley pool (Hayward OmniLogic) · outside air from Open-Meteo · times are Arizona time (MST)</p>
+
+  <div class="banner" id="banner" role="alert"></div>
+  <section class="card hero" id="hero"></section>
+
+  <section class="card">
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Time range" id="ranges">
+        <button data-h="24">24 h</button><button data-h="168">7 days</button><button data-h="720">30 days</button><button data-h="0">All</button>
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--pool)"></i>Pool water</span>
+        <span><i class="dot" style="background:var(--air)"></i>Outside air</span>
+      </div>
+    </div>
+    <div class="chart-wrap" id="chartWrap">
+      <svg id="chart" role="img" aria-label="Pool and outside temperature over time"></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+    <p class="note" id="note"></p>
+  </section>
+
+  <section class="card">
+    <table>
+      <thead><tr><th>Time</th><th class="num">Pool °F</th><th class="num">Outside °F</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="more" id="more"></div>
+  </section>
+</main>
+
+<script>
+// Rebuilt by logger.py (GitHub Actions) after every logger run.
+const GENERATED = new Date("/*GENERATED*/");
+const RAW = /*DATA*/;              // [[ "yyyy-MM-ddTHH:mm:ssZ" (UTC), poolF, airF|null ], ...] oldest first
+const GAP_MS = 2 * 3600e3;          // break the line where readings stop for > 2 h
+// Everything is shown in Arizona time, whatever the viewer's own time zone.
+// Arizona stays on MST (UTC-7) all year, so day boundaries are a fixed offset.
+const TZ = "America/Phoenix", TZ_OFF = -7 * 3600e3;
+
+const data = RAW.map(([t, p, a]) => ({ t: new Date(t), p, a: a === 0 ? null : a }));  // 0 °F = failed weather lookup
+const fmtTime = d => d.toLocaleTimeString([], { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+const fmtDay  = d => d.toLocaleDateString([], { timeZone: TZ, weekday: "short", month: "short", day: "numeric", year: "numeric" });
+const fmtFull = d => fmtDay(d) + " · " + fmtTime(d);
+const $ = id => document.getElementById(id);
+
+// ---- Hero -----------------------------------------------------------------
+(function hero() {
+  const el = $("hero");
+  if (!data.length) { el.innerHTML = '<div class="empty">No readings yet.</div>'; return; }
+  const last = data[data.length - 1];
+  const mins = Math.round((Date.now() - last.t) / 60000);
+  const ago = mins < 1 ? "just now" : mins < 60 ? mins + " min ago" : mins < 2880 ? Math.round(mins / 60) + " h ago" : Math.round(mins / 1440) + " days ago";
+  const stale = mins > 90;          // GitHub runs the 15-min schedule late at times
+  if (stale) {
+    const b = $("banner");
+    b.innerHTML = `Pool logger isn't recording — no new reading for ${ago.replace(" ago", "")}.` +
+      `<small>Check the latest run under Actions in github.com/frapich/pool-temp-logger (Hayward login or the schedule).</small>`;
+    b.style.display = "block";
+  }
+  el.innerHTML = `
+    <div class="stat"><div class="label"><i class="dot" style="background:var(--pool)"></i>Pool water</div>
+      <div class="value">${last.p}°</div></div>
+    <div class="stat small"><div class="label"><i class="dot" style="background:var(--air)"></i>Outside air</div>
+      <div class="value">${last.a ?? "–"}°</div></div>
+    <div class="updated${stale ? " stale" : ""}">Last reading ${fmtFull(last.t)}<br>${stale ? "⚠ " : ""}${ago}</div>`;
+})();
+
+// ---- Range ----------------------------------------------------------------
+let hours = 168;
+try { const s = localStorage.getItem("poolRange"); if (s !== null) hours = +s; } catch (e) {}
+function inRange() {
+  if (!hours) return data;
+  const from = Date.now() - hours * 3600e3;
+  return data.filter(d => d.t >= from);
+}
+$("ranges").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  hours = +b.dataset.h;
+  try { localStorage.setItem("poolRange", hours); } catch (e) {}
+  render();
+});
+
+// ---- Chart ----------------------------------------------------------------
+const NS = "http://www.w3.org/2000/svg";
+const svg = $("chart"), tip = $("tip"), wrap = $("chartWrap");
+function node(tag, attrs, parent) { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); parent && parent.appendChild(n); return n; }
+
+function niceTicks(lo, hi, n) {
+  const step0 = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 5, 10].map(m => m * mag).find(s => s >= step0);
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return out;
+}
+function timeTicks(t0, t1, w) {
+  const span = t1 - t0, H = 3600e3, D = 24 * H;
+  const target = Math.max(2, Math.floor(w / 110));
+  const steps = [H, 3 * H, 6 * H, 12 * H, D, 2 * D, 7 * D, 14 * D, 30 * D, 61 * D];
+  const step = steps.find(s => span / s <= target) || 91 * D;
+  const out = [], unit = step >= D ? D : H;
+  const start = Math.floor((t0 + TZ_OFF) / unit) * unit - TZ_OFF;
+  for (let t = start; t <= t1; t += step) if (t >= t0) out.push({ t, day: step >= D });
+  return out;
+}
+function segments(pts, key, x, y) {
+  let d = "", prev = null;
+  for (const p of pts) {
+    if (p[key] == null) { prev = null; continue; }
+    d += (prev && p.t - prev.t <= GAP_MS ? "L" : "M") + x(p.t).toFixed(1) + "," + y(p[key]).toFixed(1);
+    prev = p;
+  }
+  return d;
+}
+
+let hover = null;
+function drawChart(pts) {
+  svg.innerHTML = ""; tip.style.display = "none"; hover = null;
+  const W = svg.clientWidth, H = svg.clientHeight, m = { l: 36, r: 12, t: 10, b: 26 };
+  if (!pts.length) {
+    node("text", { x: W / 2, y: H / 2, "text-anchor": "middle", fill: "var(--text-3)", "font-size": 14 }, svg).textContent = "No readings in this range";
+    return;
+  }
+  const vals = pts.flatMap(p => [p.p, p.a]).filter(v => v != null);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < 6) { const mid = (hi + lo) / 2; lo = mid - 3; hi = mid + 3; }
+  lo = Math.floor(lo - 1); hi = Math.ceil(hi + 1);
+  // The x-axis spans the selected range (so a quiet week still reads as a week);
+  // "All" spans the data itself.
+  const t1 = hours ? Date.now() : Math.max(+pts[pts.length - 1].t, +pts[0].t + 3600e3);
+  const t0 = hours ? t1 - hours * 3600e3 : +pts[0].t;
+  const x = t => m.l + (t - t0) / (t1 - t0) * (W - m.l - m.r);
+  const y = v => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
+
+  const g = node("g", { class: "axis" }, svg);
+  for (const v of niceTicks(lo, hi, 5)) {
+    node("line", { class: "gridline", x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }, g);
+    node("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, g).textContent = v + "°";
+  }
+  for (const tk of timeTicks(t0, t1, W - m.l - m.r)) {
+    const d = new Date(tk.t);
+    node("text", { x: x(tk.t), y: H - 6, "text-anchor": "middle" }, g).textContent =
+      tk.day ? d.toLocaleDateString([], { timeZone: TZ, month: "short", day: "numeric" }) : fmtTime(d);
+  }
+  node("path", { class: "line", stroke: "var(--air)", d: segments(pts, "a", x, y) }, svg);
+  node("path", { class: "line", stroke: "var(--pool)", d: segments(pts, "p", x, y) }, svg);
+  // Lone points (no neighbour within the gap) would be invisible as a path - mark them.
+  pts.forEach((p, i) => {
+    const near = j => pts[j] && Math.abs(pts[j].t - p.t) <= GAP_MS;
+    if (!near(i - 1) && !near(i + 1)) {
+      node("circle", { cx: x(p.t), cy: y(p.p), r: 3, fill: "var(--pool)" }, svg);
+      if (p.a != null) node("circle", { cx: x(p.t), cy: y(p.a), r: 3, fill: "var(--air)" }, svg);
+    }
+  });
+
+  const cross = node("line", { x1: 0, x2: 0, y1: m.t, y2: H - m.b, stroke: "var(--text-3)", "stroke-width": 1, "stroke-dasharray": "3 3", visibility: "hidden" }, svg);
+  const mp = node("circle", { r: 4.5, fill: "var(--pool)", stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, svg);
+  const ma = node("circle", { r: 4.5, fill: "var(--air)", stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, svg);
+  hover = { pts, x, y, cross, mp, ma, W };
+}
+
+function onMove(ev) {
+  if (!hover) return;
+  const r = svg.getBoundingClientRect(), px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+  let best = null, bd = Infinity;
+  for (const p of hover.pts) { const d = Math.abs(hover.x(p.t) - px); if (d < bd) { bd = d; best = p; } }
+  if (!best || bd > 40) { onLeave(); return; }
+  const cx = hover.x(best.t);
+  for (const el of [hover.cross, hover.mp]) el.setAttribute("visibility", "visible");
+  hover.cross.setAttribute("x1", cx); hover.cross.setAttribute("x2", cx);
+  hover.mp.setAttribute("cx", cx); hover.mp.setAttribute("cy", hover.y(best.p));
+  if (best.a != null) { hover.ma.setAttribute("visibility", "visible"); hover.ma.setAttribute("cx", cx); hover.ma.setAttribute("cy", hover.y(best.a)); }
+  else hover.ma.setAttribute("visibility", "hidden");
+  tip.innerHTML = `<div class="t">${fmtFull(best.t)}</div>
+    <div class="r"><i class="dot" style="background:var(--pool)"></i>Pool ${best.p}°F</div>
+    <div class="r"><i class="dot" style="background:var(--air)"></i>Outside ${best.a ?? "–"}${best.a != null ? "°F" : ""}</div>`;
+  tip.style.display = "block";
+  const tw = tip.offsetWidth, left = cx + 14 + tw > hover.W ? cx - 14 - tw : cx + 14;
+  tip.style.left = left + "px"; tip.style.top = "8px";
+}
+function onLeave() {
+  if (!hover) return;
+  for (const el of [hover.cross, hover.mp, hover.ma]) el.setAttribute("visibility", "hidden");
+  tip.style.display = "none";
+}
+svg.addEventListener("mousemove", onMove);
+svg.addEventListener("touchstart", onMove, { passive: true });
+svg.addEventListener("touchmove", onMove, { passive: true });
+svg.addEventListener("mouseleave", onLeave);
+
+// ---- Table ----------------------------------------------------------------
+let shown = 100;
+function drawTable(pts) {
+  const rows = pts.slice().reverse(), body = $("rows");
+  let html = "", lastDay = "";
+  for (const p of rows.slice(0, shown)) {
+    const day = fmtDay(p.t);
+    if (day !== lastDay) { html += `<tr class="day"><td colspan="3">${day}</td></tr>`; lastDay = day; }
+    html += `<tr><td>${fmtTime(p.t)}</td><td class="num">${p.p}</td><td class="num">${p.a ?? "–"}</td></tr>`;
+  }
+  body.innerHTML = html || '<tr><td colspan="3" class="empty" style="padding:24px 0">No readings in this range</td></tr>';
+  $("more").innerHTML = rows.length > shown ? `<button id="moreBtn">Show more (${rows.length - shown} older)</button>` : "";
+  const b = $("moreBtn"); if (b) b.onclick = () => { shown += 200; drawTable(pts); };
+}
+
+function render() {
+  for (const b of $("ranges").children) b.setAttribute("aria-pressed", +b.dataset.h === hours);
+  const pts = inRange();
+  shown = 100;
+  drawChart(pts); drawTable(pts);
+  const gaps = []; for (let i = 1; i < pts.length; i++) if (pts[i].t - pts[i - 1].t > 2 * 86400e3) gaps.push(pts[i - 1].t, pts[i].t);
+  $("note").textContent = (pts.length ? pts.length + " readings. " : "") +
+    (gaps.length ? `No readings ${fmtDay(gaps[0])} – ${fmtDay(gaps[1])} (logger was down). ` : "") +
+    `Page built ${fmtFull(GENERATED)} AZ; it refreshes itself every 5 minutes. A reading is taken about every 15 minutes.`;
+}
+render();
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 150); });
+setTimeout(() => location.reload(), 5 * 60e3);
+</script>
+</body>
+</html>
