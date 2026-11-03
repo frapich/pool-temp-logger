@@ -185,7 +185,8 @@ def update_alert_state(error=None, reading=None):
         due = state["fails"] >= ALERT_AFTER_FAILS and (
             not last or (now - datetime.fromisoformat(last)).total_seconds() >= ALERT_REPEAT_HOURS * 3600)
         if due:
-            since = datetime.fromisoformat(state["failingSince"]).astimezone(ARIZONA).strftime("%b %-d %-I:%M %p")
+            t = datetime.fromisoformat(state["failingSince"]).astimezone(ARIZONA)
+            since = f"{t:%b} {t.day} {t.hour % 12 or 12}:{t:%M %p}"
             what = "still failing" if last else "failed"
             run = os.environ.get("RUN_URL", "")
             text = (f"⚠ Pool logger {what} on GitHub Actions - no reading since {since} AZ "
