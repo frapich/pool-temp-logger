@@ -1,13 +1,16 @@
 name: Log pool temperature
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"   # every 15 min, off the top of the hour when GitHub is busiest (GitHub may run late or skip)
+    # GitHub's scheduler is far too unreliable for 15 min (it ran once in 4 h), so each
+    # run starts the next one (last step). This cron only restarts that chain if it breaks.
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
   pages: write
   id-token: write
+  actions: write      # to start the next run
 
 concurrency:
   group: log
@@ -16,7 +19,7 @@ concurrency:
 jobs:
   log:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -48,3 +51,16 @@ jobs:
           path: site
       - id: deploy
         uses: actions/deploy-pages@v4
+
+      - name: Start the next run at the next quarter hour (:07, :22, :37, :52)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          now=$(date +%s)
+          next=$(( (now - 420) / 900 * 900 + 900 + 420 ))
+          wait=$(( next - now - 20 ))
+          [ $wait -gt 0 ] && sleep $wait
+          # Another run already waiting or running (e.g. a cron backup) carries the chain on.
+          others=$(gh run list -R "$GITHUB_REPOSITORY" -w log.yml --limit 20 --json databaseId,status             --jq "[.[] | select(.status != \"completed\" and .databaseId != ${{ github.run_id }})] | length")
+          if [ "$others" = "0" ]; then gh workflow run log.yml -R "$GITHUB_REPOSITORY" --ref main; else echo "$others other run(s) pending; not starting another"; fi
