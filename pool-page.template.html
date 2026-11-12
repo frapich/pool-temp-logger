@@ -221,6 +221,9 @@ function drawChart(pts) {
   let lo = Math.min(...vals), hi = Math.max(...vals);
   if (hi - lo < 6) { const mid = (hi + lo) / 2; lo = mid - 3; hi = mid + 3; }
   lo = Math.floor(lo - 1); hi = Math.ceil(hi + 1);
+  // Widen to whole gridlines so no line runs past the top or bottom label.
+  const yt = niceTicks(lo, hi, 5), ys = yt.length > 1 ? yt[1] - yt[0] : 1;
+  lo = Math.floor(lo / ys) * ys; hi = Math.ceil(hi / ys) * ys;
   // The x-axis spans the selected range (so a quiet week still reads as a week);
   // "All" spans the data itself.
   const t1 = hours ? Date.now() : Math.max(+pts[pts.length - 1].t, +pts[0].t + 3600e3);
@@ -229,7 +232,7 @@ function drawChart(pts) {
   const y = v => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
 
   const g = node("g", { class: "axis" }, svg);
-  for (const v of niceTicks(lo, hi, 5)) {
+  for (let v = lo; v <= hi + 1e-9; v += ys) {
     node("line", { class: "gridline", x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }, g);
     node("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, g).textContent = v + "°";
   }

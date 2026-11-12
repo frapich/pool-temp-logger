@@ -63,11 +63,14 @@ jobs:
           [ $wait -gt 0 ] && sleep $wait
           # Another run already waiting or running (e.g. a cron backup, or a dispatch that
           # reported an error but went through) carries the chain on. GitHub's API sometimes
-          # answers 502, which once broke the chain for 2 h, so keep trying for ~5 min.
+          # answers 502 (broke the chain for 2 h on Nov 4), and a dispatched run sometimes
+          # never starts ("startup_failure", 3 h on Nov 11). So after dispatching, look again
+          # 30 s later and only stop once a newer run is really alive; ~5 min of tries.
+          since=$(date -u -d @$now +%Y-%m-%dT%H:%M:%SZ)
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            others=$(gh run list -R "$GITHUB_REPOSITORY" -w log.yml --limit 20 --json databaseId,status,createdAt               --jq "[.[] | select(.databaseId != ${{ github.run_id }} and (.status != \"completed\" or .createdAt > \"$(date -u -d @$now +%Y-%m-%dT%H:%M:%SZ)\"))] | length") || others=""
-            if [ "$others" != "" ] && [ "$others" != "0" ]; then echo "$others newer run(s) exist; not starting another"; exit 0; fi
-            if [ "$others" = "0" ] && gh workflow run log.yml -R "$GITHUB_REPOSITORY" --ref main; then exit 0; fi
-            echo "Attempt $attempt failed; retrying in 30 s"; sleep 30
+            others=$(gh run list -R "$GITHUB_REPOSITORY" -w log.yml --limit 20 --json databaseId,status,conclusion,createdAt               --jq "[.[] | select(.databaseId != ${{ github.run_id }} and .conclusion != \"startup_failure\" and (.status != \"completed\" or .createdAt > \"$since\"))] | length") || others=""
+            if [ "$others" != "" ] && [ "$others" != "0" ]; then echo "$others newer run(s) alive; done"; exit 0; fi
+            if [ "$others" = "0" ]; then gh workflow run log.yml -R "$GITHUB_REPOSITORY" --ref main || echo "Dispatch failed"; fi
+            echo "Attempt $attempt: checking again in 30 s"; sleep 30
           done
           exit 1
